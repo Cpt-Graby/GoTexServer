@@ -1,29 +1,28 @@
 package main
 
 import (
+	"errors"
 	"fmt"
+	"log"
 	"net/http"
 	"os"
-	"log"
-	"errors"
 )
 
 func checkFileExists(filePath string) bool {
-	_, error := os.Stat(filePath)
-	return !errors.Is(error, os.ErrNotExist)
+	_, err := os.Stat(filePath)
+	return !errors.Is(err, os.ErrNotExist)
 }
 
-func dlHandler(w http.ResponseWriter, r *http.Request){
-	title := r.URL.Path[len("/dl/"):]
-	if !checkFileExists("./" + title) {
-		fmt.Println("file not exists ", title)
+func dlHandler(w http.ResponseWriter, r *http.Request) {
+	name := r.URL.Path[len("/dl/"):]
+	if !checkFileExists("./" + name) {
+		fmt.Println("file does not exists!", name)
 		http.NotFound(w, r)
 		return
 	}
-	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%q", title))
-	http.ServeFile(w, r, title)
+	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%q", name))
+	http.ServeFile(w, r, name)
 }
-
 
 func main() {
 	http.HandleFunc("/dl/", dlHandler)
