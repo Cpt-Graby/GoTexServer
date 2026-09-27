@@ -5,27 +5,20 @@ import (
 	"fmt"
 	"io/fs"
 	"log"
+	"mime"
 	"net/http"
 	"os"
+	"path"
 )
 
 const baseDir = "./serving_files"
 
-var root *os.Root
-
-func fileExists(filePath string) (bool, error) {
-	_, err := root.Stat(filePath)
-	if err != nil {
-		if errors.Is(err, fs.ErrNotExist) {
-			return false, nil
-		}
-		return false, err
-	}
-	return true, nil
+type downloadHandler struct {
+	root *os.Root
 }
 
-func dlHandler(w http.ResponseWriter, r *http.Request) {
-	fileName := r.URL.Path[len("/dl/"):]
+func (dlH *downloadHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	fileName := r.PathValue("path")
 
 	if !fs.ValidPath(fileName) {
 		fmt.Println("invalid path:", fileName)
@@ -33,31 +26,47 @@ func dlHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	exists, err := fileExists(fileName)
+	f, err := dlH.root.Open(fileName)
 	if err != nil {
-		fmt.Println("cannot check file:", fileName, err)
+		if !errors.Is(err, fs.ErrNotExist) {
+			fmt.Println("cannot open file:", fileName, err)
+		}
 		http.NotFound(w, r)
-		//http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
-	if !exists {
-		fmt.Println("file does not exist:", fileName)
+	defer f.Close()
+
+	info, err := f.Stat()
+	if err != nil {
+		fmt.Println("cannot stat file:", fileName, err)
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		return
+	}
+	if !info.Mode().IsRegular() {
+		fmt.Println("not a regular file:", fileName)
 		http.NotFound(w, r)
 		return
 	}
 
-	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filefileName=%q", fileName))
-	http.ServeFileFS(w, r, root.FS(), fileName)
+	params := map[string]string{"filename": path.Base(fileName)}
+	if cd := mime.FormatMediaType("attachment", params); cd != "" {
+		w.Header().Set("Content-Disposition", cd)
+	} else {
+		w.Header().Set("Content-Disposition", "attachment")
+	}
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+
+	http.ServeContent(w, r, info.Name(), info.ModTime(), f)
 }
 
 func main() {
-	var err error
-	root, err = os.OpenRoot(baseDir)
+	root, err := os.OpenRoot(baseDir)
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer root.Close()
 
-	http.HandleFunc("/dl/", dlHandler)
-	log.Fatal(http.ListenAndServe(":8080", nil))
+	mux := http.NewServeMux()
+	mux.Handle("GET /dl/{path...}", &downloadHandler{root: root})
+	log.Fatal(http.ListenAndServe(":8080", mux))
 }
