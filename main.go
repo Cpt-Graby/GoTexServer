@@ -67,6 +67,6 @@ func main() {
 	defer root.Close()
 
 	mux := http.NewServeMux()
-	mux.Handle("GET /del/{path...}", &downloadHandler{root: root})
+	mux.Handle("GET /dl/{path...}", &downloadHandler{root: root})
 	log.Fatal(http.ListenAndServe(":8080", mux))
 }
