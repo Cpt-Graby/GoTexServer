@@ -59,14 +59,17 @@ func (dlH *downloadHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	http.ServeContent(w, r, info.Name(), info.ModTime(), f)
 }
 
+func createMux(root *os.Root) *http.ServeMux {
+	mux := http.NewServeMux()
+	mux.Handle("GET /dl/{path...}", &downloadHandler{root: root})
+	return mux
+}
+
 func main() {
 	root, err := os.OpenRoot(baseDir)
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer root.Close()
-
-	mux := http.NewServeMux()
-	mux.Handle("GET /dl/{path...}", &downloadHandler{root: root})
-	log.Fatal(http.ListenAndServe(":8080", mux))
+	log.Fatal(http.ListenAndServe(":8080", createMux(root)))
 }
