@@ -2,6 +2,7 @@ package main
 
 import (
 	"errors"
+	"flag"
 	"fmt"
 	"io/fs"
 	"log"
@@ -10,8 +11,6 @@ import (
 	"os"
 	"path"
 )
-
-const baseDir = "./serving_files"
 
 type downloadHandler struct {
 	root *os.Root
@@ -65,11 +64,22 @@ func createMux(root *os.Root) *http.ServeMux {
 	return mux
 }
 
-func main() {
-	root, err := os.OpenRoot(baseDir)
+func run(port, dir string) error {
+	root, err := os.OpenRoot(dir)
 	if err != nil {
-		log.Fatal(err)
+		return fmt.Errorf("opening download root %q: %w", dir, err)
 	}
 	defer root.Close()
-	log.Fatal(http.ListenAndServe(":8080", createMux(root)))
+	log.Fatal(http.ListenAndServe("port", createMux(root)))
+	return nil
+}
+
+func main() {
+	port := flag.String("port", ":8080", "port listened to")
+	dir := flag.String("dir", "./serving_files", "repo where to download files")
+	flag.Parse()
+	if err := run(*port, *dir); err != nil {
+		fmt.Fprintln(os.Stderr, "error:", err)
+		os.Exit(1)
+	}
 }
