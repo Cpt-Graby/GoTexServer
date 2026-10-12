@@ -5,7 +5,6 @@ import (
 	"flag"
 	"fmt"
 	"io/fs"
-	"log"
 	"mime"
 	"net/http"
 	"os"
@@ -70,12 +69,15 @@ func run(port, dir string) error {
 		return fmt.Errorf("opening download root %q: %w", dir, err)
 	}
 	defer root.Close()
-	log.Fatal(http.ListenAndServe("port", createMux(root)))
+	fmt.Println("listening on", port, "serving", dir)
+	if err := http.ListenAndServe(":"+port, createMux(root)); err != nil {
+		return fmt.Errorf("error with: listening on %s: %w", port, err)
+	}
 	return nil
 }
 
 func main() {
-	port := flag.String("port", ":8080", "port listened to")
+	port := flag.String("port", "8080", "port listened to")
 	dir := flag.String("dir", "./serving_files", "repo where to download files")
 	flag.Parse()
 	if err := run(*port, *dir); err != nil {
